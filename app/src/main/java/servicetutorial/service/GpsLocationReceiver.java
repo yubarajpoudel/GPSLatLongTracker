@@ -17,6 +17,9 @@ public class GpsLocationReceiver extends BroadcastReceiver {
                     Toast.LENGTH_SHORT).show();
             Intent pushIntent = new Intent(context, GoogleService.class);
             context.startService(pushIntent);
+        }else {
+            Intent pushIntent = new Intent(context, GoogleService.class);
+            context.stopService(pushIntent);
         }
     }
 }

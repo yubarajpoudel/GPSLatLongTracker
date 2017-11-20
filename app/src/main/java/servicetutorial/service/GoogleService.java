@@ -14,6 +14,17 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.mantraideas.simplehttp.datamanager.DataRequestManager;
+import com.mantraideas.simplehttp.datamanager.OnDataRecievedListener;
+import com.mantraideas.simplehttp.datamanager.dmmodel.DataRequest;
+import com.mantraideas.simplehttp.datamanager.dmmodel.DataRequestPair;
+import com.mantraideas.simplehttp.datamanager.dmmodel.Method;
+import com.mantraideas.simplehttp.datamanager.dmmodel.Response;
+import com.mantraideas.simplehttp.datamanager.util.DmUtilities;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -33,6 +44,7 @@ public class GoogleService extends Service implements LocationListener {
     long notify_interval = 5000;
     public static String str_receiver = "servicetutorial.service.receiver";
     Intent intent;
+    DbHandler handler;
 
 
     public GoogleService() {
@@ -48,7 +60,7 @@ public class GoogleService extends Service implements LocationListener {
     @Override
     public void onCreate() {
         super.onCreate();
-
+        handler = new DbHandler(this);
         mTimer = new Timer();
         mTimer.schedule(new TimerTaskToGetLocation(), 5, notify_interval);
         intent = new Intent(str_receiver);
@@ -79,19 +91,14 @@ public class GoogleService extends Service implements LocationListener {
         locationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
         isGPSEnable = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
         isNetworkEnable = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-
+        Log.d("GoogleService", "GpsEnabled = " + isGPSEnable + " isNetworkAvaialble = " + isNetworkEnable);
         if (!isGPSEnable && !isNetworkEnable) {
-            super.stopService(new Intent(this, GoogleService.class));
+           Log.d("Googleservice", "location off");
         } else {
 
             if (isNetworkEnable) {
                 location = null;
-
-                if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    return;
-                }
-
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000, 0, this);
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1, 0, this);
                 if (locationManager != null) {
                     location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
                     if (location != null) {
@@ -110,7 +117,7 @@ public class GoogleService extends Service implements LocationListener {
 
             if (isGPSEnable) {
                 location = null;
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 0, this);
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1, 0, this);
                 if (locationManager != null) {
                     location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     if (location != null) {
@@ -143,6 +150,42 @@ public class GoogleService extends Service implements LocationListener {
     }
 
     private void fn_update(Location location) {
+        boolean hasData = handler.isDataExists();
+        Log.d("MainActivity", "isOfflineDataExists = " + hasData);
+
+        if (hasData && DmUtilities.isNetworkConnected(getApplicationContext())) {
+            List<LatLng> latLngslist = new ArrayList<>();
+            latLngslist.addAll(handler.getData());
+            Log.d("MainActivity", "latlongListSize = " + latLngslist.size());
+            handler.deleteAllData();
+        }
+
+        DataRequestPair requestPair = DataRequestPair.create();
+        requestPair.put("u_id", "5a05904593ec6");
+        requestPair.put("lat", latitude + "");
+        requestPair.put("lng", longitude + "");
+        requestPair.put("battery", Utilities.getBatteryPercentage(getApplicationContext()) + "");
+
+        DataRequest request = DataRequest.getInstance();
+        request.addUrl("http://tracker.mantraideas.com/api/gps-logs");
+        request.addMethod(Method.POST);
+//            request.addMinimumServerCallTimeDifference(5000);
+        request.addDataRequestPair(requestPair);
+
+        DataRequestManager<String> requestManager = DataRequestManager.getInstance(getApplicationContext(), String.class);
+        requestManager.addRequestBody(request);
+        requestManager.addOnDataRecieveListner(new OnDataRecievedListener() {
+            @Override
+            public void onDataRecieved(Response response, Object object) {
+                if (response == Response.OK) {
+                    Log.d("Main", "data = " + object.toString());
+                } else {
+                    boolean success = handler.saveData(latitude, longitude);
+                    Log.d("MainActivity", "success = " + success);
+                }
+            }
+        });
+        requestManager.sync();
         intent.putExtra("latutide", location.getLatitude() + "");
         intent.putExtra("longitude", location.getLongitude() + "");
         sendBroadcast(intent);

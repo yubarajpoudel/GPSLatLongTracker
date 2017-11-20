@@ -7,6 +7,7 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.support.v4.app.NavUtils;
+import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.vision.barcode.Barcode;
@@ -55,6 +56,7 @@ public class DbHandler extends SQLiteOpenHelper {
         while (cursor.moveToNext()) {
             latLngList.add(new LatLng(cursor.getFloat(1), cursor.getFloat(2)));
         }
+        Log.d("DbHandler", "latlongList size = " + latLngList.size());
         cursor.close();
         db.close();
         return latLngList;
@@ -69,6 +71,6 @@ public class DbHandler extends SQLiteOpenHelper {
 
     public boolean isDataExists() {
         SQLiteDatabase db = this.getReadableDatabase();
-        return DatabaseUtils.queryNumEntries(db, DATABASE_NAME) == 0;
+        return DatabaseUtils.queryNumEntries(db, DATABASE_NAME) > 0;
     }
 }
